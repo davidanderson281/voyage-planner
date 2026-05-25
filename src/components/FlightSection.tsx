@@ -261,8 +261,20 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
         ) : (
           <div className="grid-cards">
             {trip.flights.map((flight) => {
-              const outDate = flight.departureTime ? new Date(flight.departureTime) : null;
-              const retDate = flight.returnDepartureTime ? new Date(flight.returnDepartureTime) : null;
+              const outDepDate = flight.departureTime ? new Date(flight.departureTime) : null;
+              const outArrDate = flight.arrivalTime ? new Date(flight.arrivalTime) : null;
+              const retDepDate = flight.returnDepartureTime ? new Date(flight.returnDepartureTime) : null;
+              const retArrDate = flight.returnArrivalTime ? new Date(flight.returnArrivalTime) : null;
+
+              const formatDateTime = (date: Date | null) => {
+                if (!date) return 'N/A';
+                return date.toLocaleDateString(undefined, { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                });
+              };
 
               return (
                 <div key={flight.id} className="item-card">
@@ -280,30 +292,47 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={12} />
-                      {outDate ? outDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
+                        <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
+                        <span>{formatDateTime(outDepDate)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Arr:</span>
+                        <Clock size={12} style={{ color: 'var(--text-muted)' }} />
+                        <span>{formatDateTime(outArrDate)}</span>
+                      </div>
                     </div>
 
                     {flight.returnAirline && (
                       <div style={{
-                        marginTop: '6px',
+                        marginTop: '8px',
                         borderTop: '1px solid var(--card-border)',
-                        paddingTop: '6px',
+                        paddingTop: '8px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '4px'
+                        gap: '6px'
                       }}>
                         <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)' }}>Return Flight</span>
                         <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                           {flight.returnAirline} <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>({flight.returnFlightNumber})</span>
                         </span>
                         <span style={{ fontSize: '11px' }}>{flight.returnDepartureAirport} → {flight.returnArrivalAirport}</span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Clock size={12} />
-                          {retDate ? retDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                        </span>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
+                            <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
+                            <span>{formatDateTime(retDepDate)}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Arr:</span>
+                            <Clock size={12} style={{ color: 'var(--text-muted)' }} />
+                            <span>{formatDateTime(retArrDate)}</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
