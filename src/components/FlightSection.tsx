@@ -176,17 +176,17 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
           {/* Return Toggle */}
           <div style={{ margin: '6px 0' }}>
             <label className="switch-container">
+              <input 
+                type="checkbox" 
+                checked={hasReturn} 
+                onChange={e => setHasReturn(e.target.checked)} 
+                style={{ display: 'none' }} 
+              />
               <div className={`switch-track ${hasReturn ? 'active' : ''}`}>
                 <div className="switch-thumb" />
               </div>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Include Return Flight</span>
             </label>
-            <input 
-              type="checkbox" 
-              checked={hasReturn} 
-              onChange={e => setHasReturn(e.target.checked)} 
-              style={{ display: 'none' }} 
-            />
           </div>
 
           {/* Return Section */}
