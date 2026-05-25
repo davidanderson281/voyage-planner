@@ -293,16 +293,19 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
-                        <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
-                        <span>{formatDateTime(outDepDate)}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Arr:</span>
-                        <Clock size={12} style={{ color: 'var(--text-muted)' }} />
-                        <span>{formatDateTime(outArrDate)}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)' }}>Outbound Flight</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
+                          <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
+                          <span>{formatDateTime(outDepDate)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Arr:</span>
+                          <Clock size={12} style={{ color: 'var(--text-muted)' }} />
+                          <span>{formatDateTime(outArrDate)}</span>
+                        </div>
                       </div>
                     </div>
 
