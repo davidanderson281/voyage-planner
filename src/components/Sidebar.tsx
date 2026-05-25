@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trip } from '../types';
-import { Plus, Trash2, Copy, Compass, Calendar, DollarSign, Sun, Moon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Copy, Compass, Calendar, DollarSign, Sun, Moon, ChevronLeft, ChevronRight, Cloud, CloudOff, LogOut } from 'lucide-react';
 
 interface SidebarProps {
   trips: Trip[];
@@ -12,6 +12,10 @@ interface SidebarProps {
   onUpdateBudget: (id: string, budget: number) => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  hasFirebase: boolean;
+  user: { email: string | null; displayName: string | null } | null;
+  onOpenAuth: () => void;
+  onLogout: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -23,7 +27,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloneTrip,
   onUpdateBudget,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  hasFirebase,
+  user,
+  onOpenAuth,
+  onLogout
 }) => {
   const [newDest, setNewDest] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -296,52 +304,119 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* Bottom Profile / Settings Panel */}
+      {/* Bottom Profile & Firebase Sync Panel */}
       <div style={{
         padding: '16px',
         borderTop: '1px solid var(--card-border)',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: isCollapsed ? 'center' : 'space-between',
-        gap: '12px'
+        flexDirection: 'column',
+        gap: '12px',
+        backgroundColor: 'rgba(255, 255, 255, 0.01)'
       }}>
         {!isCollapsed && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              backgroundColor: 'var(--color-accent)',
-              color: '#ffffff',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '600',
-              fontSize: '13px'
-            }}>
-              DA
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', fontWeight: '600' }}>David A.</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Trip Planner</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                <div style={{
+                  backgroundColor: 'var(--color-success)',
+                  color: '#ffffff',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '600',
+                  fontSize: '13px',
+                  flexShrink: 0
+                }}>
+                  {(user.displayName || user.email || 'U').substring(0, 2).toUpperCase()}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                  <span style={{ 
+                    fontSize: '13px', 
+                    fontWeight: '600',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    {user.displayName || user.email?.split('@')[0]}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                    <Cloud size={10} /> Cloud Synced
+                  </span>
+                </div>
+                <button 
+                  onClick={onLogout} 
+                  className="btn-icon" 
+                  title="Sign Out"
+                  style={{ padding: '6px' }}
+                >
+                  <LogOut size={14} style={{ color: 'var(--color-danger)' }} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ width: '100%' }}>
+                {hasFirebase ? (
+                  <button 
+                    onClick={onOpenAuth}
+                    className="btn btn-secondary"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      justifyContent: 'flex-start',
+                      gap: '8px'
+                    }}
+                  >
+                    <Cloud size={14} style={{ color: 'var(--color-accent)' }} />
+                    <span>Sign In to Sync</span>
+                  </button>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12px',
+                    color: 'var(--text-muted)'
+                  }}>
+                    <CloudOff size={14} />
+                    <span>Local Mode (Offline)</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
-        
-        {/* Light/Dark Toggle */}
-        <button 
-          onClick={onToggleTheme} 
-          className="btn-icon" 
-          title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          style={{
-            padding: '8px',
-            borderRadius: 'var(--radius-sm)',
-            backgroundColor: 'var(--bg-tertiary)',
-            border: '1px solid var(--card-border)'
-          }}
-        >
-          {theme === 'dark' ? <Sun size={15} style={{ color: 'var(--color-warning)' }} /> : <Moon size={15} style={{ color: 'var(--color-accent)' }} />}
-        </button>
+
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: isCollapsed ? 'center' : 'space-between',
+          borderTop: !isCollapsed ? '1px solid var(--card-border)' : 'none',
+          paddingTop: !isCollapsed ? '10px' : '0'
+        }}>
+          {!isCollapsed && (
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              v1.0 (Firebase Cloud)
+            </span>
+          )}
+          
+          {/* Light/Dark Toggle */}
+          <button 
+            onClick={onToggleTheme} 
+            className="btn-icon" 
+            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            style={{
+              padding: '8px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'var(--bg-tertiary)',
+              border: '1px solid var(--card-border)'
+            }}
+          >
+            {theme === 'dark' ? <Sun size={15} style={{ color: 'var(--color-warning)' }} /> : <Moon size={15} style={{ color: 'var(--color-accent)' }} />}
+          </button>
+        </div>
       </div>
     </aside>
   );

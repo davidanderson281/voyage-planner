@@ -45,6 +45,7 @@ export interface PackingItem {
 
 export interface Trip {
   id: string;
+  userId?: string | null; // Track database ownership
   destination: string;
   startDate: string;
   endDate: string;

@@ -7,11 +7,25 @@ import { HotelSection } from './components/HotelSection';
 import { ItinerarySection } from './components/ItinerarySection';
 import { PackingSection } from './components/PackingSection';
 import { AiAssistant } from './components/AiAssistant';
-import { Calendar, MapPin, Plane, CheckSquare, AlertCircle } from 'lucide-react';
+import { AuthModal } from './components/AuthModal';
+import { auth, db, hasFirebase } from './firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { 
+  collection, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  writeBatch 
+} from 'firebase/firestore';
+import { Calendar, MapPin, Plane, CheckSquare, AlertCircle, Cloud } from 'lucide-react';
 
 const INITIAL_TRIPS: Trip[] = [
   {
     id: 'tokyo-demo',
+    userId: null,
     destination: 'Tokyo, Japan',
     startDate: '2026-10-15',
     endDate: '2026-10-22',
@@ -75,6 +89,7 @@ const INITIAL_TRIPS: Trip[] = [
   },
   {
     id: 'paris-demo',
+    userId: null,
     destination: 'Paris, France',
     startDate: '2026-07-02',
     endDate: '2026-07-06',
@@ -90,37 +105,23 @@ const INITIAL_TRIPS: Trip[] = [
 ];
 
 function App() {
-  const [trips, setTrips] = useState<Trip[]>(() => {
-    const saved = localStorage.getItem('voyage_trips');
-    return saved ? JSON.parse(saved) : INITIAL_TRIPS;
-  });
-
-  const [activeTripId, setActiveTripId] = useState<string | null>(() => {
-    const savedId = localStorage.getItem('voyage_active_trip_id');
-    if (savedId) return savedId;
-    return INITIAL_TRIPS.length > 0 ? INITIAL_TRIPS[0].id : null;
-  });
-
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'itinerary' | 'packing'>('details');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  
+  // Auth states
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+  // Sync theme
+  useEffect(() => {
     const savedTheme = localStorage.getItem('color-scheme') as 'dark' | 'light';
-    return savedTheme || 'dark';
-  });
+    const initTheme = savedTheme || 'dark';
+    setTheme(initTheme);
+    document.documentElement.setAttribute('data-theme', initTheme);
+  }, []);
 
-  // Save trips state to localStorage
-  useEffect(() => {
-    localStorage.setItem('voyage_trips', JSON.stringify(trips));
-  }, [trips]);
-
-  // Save active trip ID state to localStorage
-  useEffect(() => {
-    if (activeTripId) {
-      localStorage.setItem('voyage_active_trip_id', activeTripId);
-    }
-  }, [activeTripId]);
-
-  // Sync theme to DOM element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('color-scheme', theme);
@@ -130,13 +131,97 @@ function App() {
     }
   }, [theme]);
 
+  // Auth subscriber & Cloud sync listener
+  useEffect(() => {
+    if (!hasFirebase || !auth) {
+      // Offline fallback: load from local storage
+      const saved = localStorage.getItem('voyage_trips');
+      const loadedTrips = saved ? JSON.parse(saved) : INITIAL_TRIPS;
+      setTrips(loadedTrips);
+      const savedActiveId = localStorage.getItem('voyage_active_trip_id');
+      setActiveTripId(savedActiveId || (loadedTrips.length > 0 ? loadedTrips[0].id : null));
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        // User logged in: Listen to Firestore real-time updates
+        const q = query(collection(db!, 'trips'), where('userId', '==', firebaseUser.uid));
+        const unsubSnapshot = onSnapshot(q, (snapshot) => {
+          const cloudTrips: Trip[] = [];
+          snapshot.forEach((doc) => {
+            cloudTrips.push(doc.data() as Trip);
+          });
+
+          if (cloudTrips.length > 0) {
+            setTrips(cloudTrips);
+            // Verify if active trip exists in cloud
+            setActiveTripId(prev => {
+              if (prev && cloudTrips.some(t => t.id === prev)) return prev;
+              return cloudTrips[0].id;
+            });
+          } else {
+            // Keep local data or seed initial
+            const saved = localStorage.getItem('voyage_trips');
+            const local = saved ? JSON.parse(saved) : INITIAL_TRIPS;
+            setTrips(local);
+            setActiveTripId(prev => prev || (local.length > 0 ? local[0].id : null));
+          }
+        });
+
+        return () => unsubSnapshot();
+      } else {
+        // User logged out: reload local storage
+        const saved = localStorage.getItem('voyage_trips');
+        const loadedTrips = saved ? JSON.parse(saved) : INITIAL_TRIPS;
+        setTrips(loadedTrips);
+        const savedActiveId = localStorage.getItem('voyage_active_trip_id');
+        setActiveTripId(savedActiveId || (loadedTrips.length > 0 ? loadedTrips[0].id : null));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Sync state to local storage when in Guest Mode
+  useEffect(() => {
+    if (!user) {
+      localStorage.setItem('voyage_trips', JSON.stringify(trips));
+    }
+  }, [trips, user]);
+
+  useEffect(() => {
+    if (!user && activeTripId) {
+      localStorage.setItem('voyage_active_trip_id', activeTripId);
+    }
+  }, [activeTripId, user]);
+
   const handleToggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const handleAddTrip = (destination: string) => {
+  // Helper to push updates to Firestore/LocalState
+  const syncTrip = async (updatedTrip: Trip) => {
+    setTrips(prev => prev.map(t => t.id === updatedTrip.id ? updatedTrip : t));
+
+    if (user && db) {
+      try {
+        const tripDocRef = doc(db!, 'trips', updatedTrip.id);
+        await setDoc(tripDocRef, {
+          ...updatedTrip,
+          userId: user.uid
+        });
+      } catch (err) {
+        console.error('Error updating trip in Firestore:', err);
+      }
+    }
+  };
+
+  const handleAddTrip = async (destination: string) => {
     const newTrip: Trip = {
       id: `trip-${Date.now()}`,
+      userId: user ? user.uid : null,
       destination,
       startDate: '',
       endDate: '',
@@ -149,11 +234,23 @@ function App() {
       packingList: [],
       notes: ''
     };
+
     setTrips(prev => [newTrip, ...prev]);
     setActiveTripId(newTrip.id);
+
+    if (user && db) {
+      try {
+        await setDoc(doc(db!, 'trips', newTrip.id), {
+          ...newTrip,
+          userId: user.uid
+        });
+      } catch (err) {
+        console.error('Error creating trip in Firestore:', err);
+      }
+    }
   };
 
-  const handleDeleteTrip = (id: string) => {
+  const handleDeleteTrip = async (id: string) => {
     if (trips.length <= 1) {
       alert('Keep at least one trip idea on your planner!');
       return;
@@ -163,114 +260,227 @@ function App() {
     if (activeTripId === id) {
       setActiveTripId(filtered[0].id);
     }
+
+    if (user && db) {
+      try {
+        await deleteDoc(doc(db!, 'trips', id));
+      } catch (err) {
+        console.error('Error deleting trip from Firestore:', err);
+      }
+    }
   };
 
-  const handleCloneTrip = (id: string) => {
+  const handleCloneTrip = async (id: string) => {
     const target = trips.find(t => t.id === id);
     if (!target) return;
     const cloned: Trip = {
       ...target,
       id: `trip-${Date.now()}`,
+      userId: user ? user.uid : null,
       destination: `Copy of ${target.destination}`,
       flights: target.flights.map(f => ({ ...f, id: `flight-${Date.now()}-${Math.random()}` })),
       hotels: target.hotels.map(h => ({ ...h, id: `hotel-${Date.now()}-${Math.random()}` })),
       activities: target.activities.map(a => ({ ...a, id: `act-${Date.now()}-${Math.random()}` })),
       packingList: target.packingList.map(p => ({ ...p, id: `pack-${Date.now()}-${Math.random()}` }))
     };
+
     setTrips(prev => [cloned, ...prev]);
     setActiveTripId(cloned.id);
+
+    if (user && db) {
+      try {
+        await setDoc(doc(db!, 'trips', cloned.id), {
+          ...cloned,
+          userId: user.uid
+        });
+      } catch (err) {
+        console.error('Error writing cloned trip:', err);
+      }
+    }
   };
 
   const handleUpdateTripMeta = (id: string, fields: Partial<Pick<Trip, 'destination' | 'startDate' | 'endDate' | 'notes' | 'currency' | 'currencySymbol'>>) => {
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, ...fields } : t));
+    const target = trips.find(t => t.id === id);
+    if (!target) return;
+    const updated = { ...target, ...fields };
+    syncTrip(updated);
   };
 
   const handleUpdateBudget = (id: string, budget: number) => {
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, budget } : t));
+    const target = trips.find(t => t.id === id);
+    if (!target) return;
+    const updated = { ...target, budget };
+    syncTrip(updated);
   };
 
   // Flights operations
   const handleAddFlight = (tripId: string, flightData: Omit<Flight, 'id'>) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const newFlight: Flight = { ...flightData, id: `flight-${Date.now()}` };
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, flights: [...t.flights, newFlight] } : t));
+    const updated: Trip = { ...target, flights: [...target.flights, newFlight] };
+    syncTrip(updated);
   };
 
   const handleDeleteFlight = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, flights: t.flights.filter(f => f.id !== id) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, flights: target.flights.filter(f => f.id !== id) };
+    syncTrip(updated);
   };
 
   const handleUpdateFlight = (tripId: string, updatedFlight: Flight) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, flights: t.flights.map(f => f.id === updatedFlight.id ? updatedFlight : f) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, flights: target.flights.map(f => f.id === updatedFlight.id ? updatedFlight : f) };
+    syncTrip(updated);
   };
 
   // Hotels operations
   const handleAddHotel = (tripId: string, hotelData: Omit<Hotel, 'id'>) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const newHotel: Hotel = { ...hotelData, id: `hotel-${Date.now()}` };
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, hotels: [...t.hotels, newHotel] } : t));
+    const updated: Trip = { ...target, hotels: [...target.hotels, newHotel] };
+    syncTrip(updated);
   };
 
   const handleDeleteHotel = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, hotels: t.hotels.filter(h => h.id !== id) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, hotels: target.hotels.filter(h => h.id !== id) };
+    syncTrip(updated);
   };
 
   const handleUpdateHotel = (tripId: string, updatedHotel: Hotel) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, hotels: t.hotels.map(h => h.id === updatedHotel.id ? updatedHotel : h) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, hotels: target.hotels.map(h => h.id === updatedHotel.id ? updatedHotel : h) };
+    syncTrip(updated);
   };
 
   const handleSelectHotel = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? {
-      ...t,
-      hotels: t.hotels.map(h => ({ ...h, isSelected: h.id === id }))
-    } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = {
+      ...target,
+      hotels: target.hotels.map(h => ({ ...h, isSelected: h.id === id }))
+    };
+    syncTrip(updated);
   };
 
   // Activities operations
   const handleAddActivity = (tripId: string, actData: Omit<Activity, 'id'>) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const newAct: Activity = { ...actData, id: `act-${Date.now()}` };
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, activities: [...t.activities, newAct] } : t));
+    const updated: Trip = { ...target, activities: [...target.activities, newAct] };
+    syncTrip(updated);
   };
 
   const handleDeleteActivity = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, activities: t.activities.filter(a => a.id !== id) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, activities: target.activities.filter(a => a.id !== id) };
+    syncTrip(updated);
   };
 
   const handleUpdateActivity = (tripId: string, updatedAct: Activity) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, activities: t.activities.map(a => a.id === updatedAct.id ? updatedAct : a) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, activities: target.activities.map(a => a.id === updatedAct.id ? updatedAct : a) };
+    syncTrip(updated);
   };
 
   // Packing list operations
   const handleAddPackingItem = (tripId: string, itemData: Omit<PackingItem, 'id' | 'isPacked'>) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const newItem: PackingItem = { ...itemData, id: `pack-${Date.now()}`, isPacked: false };
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, packingList: [...t.packingList, newItem] } : t));
+    const updated: Trip = { ...target, packingList: [...target.packingList, newItem] };
+    syncTrip(updated);
   };
 
   const handleTogglePackingItem = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? {
-      ...t,
-      packingList: t.packingList.map(item => item.id === id ? { ...item, isPacked: !item.isPacked } : item)
-    } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = {
+      ...target,
+      packingList: target.packingList.map(item => item.id === id ? { ...item, isPacked: !item.isPacked } : item)
+    };
+    syncTrip(updated);
   };
 
   const handleDeletePackingItem = (tripId: string, id: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, packingList: t.packingList.filter(item => item.id !== id) } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, packingList: target.packingList.filter(item => item.id !== id) };
+    syncTrip(updated);
   };
 
   // AI Import actions
   const handleImportActivities = (tripId: string, newActs: Omit<Activity, 'id'>[]) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const populated = newActs.map((a, idx) => ({ ...a, id: `act-ai-${Date.now()}-${idx}` }));
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, activities: [...t.activities, ...populated] } : t));
+    const updated: Trip = { ...target, activities: [...target.activities, ...populated] };
+    syncTrip(updated);
   };
 
   const handleImportPacking = (tripId: string, newItems: Omit<PackingItem, 'id' | 'isPacked'>[]) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
     const populated = newItems.map((item, idx) => ({ ...item, id: `pack-ai-${Date.now()}-${idx}`, isPacked: false }));
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, packingList: [...t.packingList, ...populated] } : t));
+    const updated: Trip = { ...target, packingList: [...target.packingList, ...populated] };
+    syncTrip(updated);
   };
 
   const handleImportCurrency = (tripId: string, currency: string, symbol: string) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, currency, currencySymbol: symbol } : t));
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    const updated: Trip = { ...target, currency, currencySymbol: symbol };
+    syncTrip(updated);
+  };
+
+  // Sync all local offline trips into logged in account database
+  const handleSyncLocalTrips = async () => {
+    if (!user || !db) return;
+    const unsyncedTrips = trips.filter(t => !t.userId);
+    if (unsyncedTrips.length === 0) {
+      alert('All trip ideas are already synced to the cloud!');
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      unsyncedTrips.forEach((trip) => {
+        const docRef = doc(db!, 'trips', trip.id);
+        batch.set(docRef, {
+          ...trip,
+          userId: user.uid
+        });
+      });
+      await batch.commit();
+      alert(`Successfully synced ${unsyncedTrips.length} trip ideas to your cloud account!`);
+      // Update local state to reflect that they are now owned by the user
+      setTrips(prev => prev.map(t => !t.userId ? { ...t, userId: user.uid } : t));
+    } catch (err) {
+      console.error('Error syncing local trips:', err);
+      alert('Failed to sync local trips to the cloud.');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!auth) return;
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
   };
 
   const activeTrip = trips.find(t => t.id === activeTripId) || null;
+  const hasLocalUnsynced = user && trips.some(t => !t.userId);
 
   return (
     <div className="app-container">
@@ -284,9 +494,40 @@ function App() {
         onUpdateBudget={handleUpdateBudget}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        hasFirebase={hasFirebase}
+        user={user}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       <main className="main-content">
+        {/* Banner for unsynced local storage plans */}
+        {hasLocalUnsynced && (
+          <div style={{
+            backgroundColor: 'var(--bg-accent-translucent)',
+            borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
+            padding: '8px 32px',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            animation: 'slideIn 0.2s ease-out'
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Cloud size={14} style={{ color: 'var(--color-accent)' }} />
+              You have local trip ideas that aren't backed up in the cloud yet.
+            </span>
+            <button 
+              onClick={handleSyncLocalTrips} 
+              className="btn btn-primary"
+              style={{ padding: '4px 10px', fontSize: '11px' }}
+            >
+              Sync to Account
+            </button>
+          </div>
+        )}
+
         {activeTrip ? (
           <>
             {/* Header section with destination info and dates */}
@@ -483,6 +724,12 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Cloud Authentication Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+      />
     </div>
   );
 }
