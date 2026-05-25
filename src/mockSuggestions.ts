@@ -138,8 +138,8 @@ export const getSuggestions = (destination: string): DestinationSuggestion => {
 
   // Default / Generic Destination
   return {
-    currency: 'USD',
-    currencySymbol: '$',
+    currency: 'GBP',
+    currencySymbol: '£',
     weather: [
       { day: 'Day 1', temp: 24, condition: 'Sunny', icon: '☀️' },
       { day: 'Day 2', temp: 25, condition: 'Sunny', icon: '☀️' },
