@@ -279,23 +279,28 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
               return (
                 <div key={flight.id} className="item-card">
                   <div className="item-card-header">
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {flight.airline} <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>({flight.flightNumber})</span>
-                      </span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {flight.departureAirport} → {flight.arrivalAirport}
-                      </span>
-                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                      Flight Option
+                    </span>
                     <span className="item-card-price flights">
                       {trip.currencySymbol}{flight.cost.toLocaleString()}
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)' }}>Outbound Flight</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    
+                    {/* Outbound Block */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Outbound Flight
+                      </span>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '13px' }}>
+                        {flight.airline} <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '12px' }}>({flight.flightNumber})</span>
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' }}>
+                        {flight.departureAirport} → {flight.arrivalAirport}
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '2px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
                           <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
@@ -309,22 +314,25 @@ export const FlightSection: React.FC<FlightSectionProps> = ({
                       </div>
                     </div>
 
+                    {/* Return Block */}
                     {flight.returnAirline && (
                       <div style={{
-                        marginTop: '8px',
                         borderTop: '1px solid var(--card-border)',
-                        paddingTop: '8px',
+                        paddingTop: '12px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '6px'
                       }}>
-                        <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)' }}>Return Flight</span>
-                        <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                          {flight.returnAirline} <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>({flight.returnFlightNumber})</span>
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Return Flight
                         </span>
-                        <span style={{ fontSize: '11px' }}>{flight.returnDepartureAirport} → {flight.returnArrivalAirport}</span>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '13px' }}>
+                          {flight.returnAirline} <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '12px' }}>({flight.returnFlightNumber})</span>
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' }}>
+                          {flight.returnDepartureAirport} → {flight.returnArrivalAirport}
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '2px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontWeight: '600', width: '32px', color: 'var(--text-muted)' }}>Dep:</span>
                             <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
